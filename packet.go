@@ -830,8 +830,8 @@ func (pkt *PUBLISH) unmarshal(VAP []byte) error {
 	if err != nil {
 		return ErrMissingTopicName
 	}
-	if err = validateTopicName(topicName); err != nil {
-		return concatErrors(ErrTopicName, err)
+	if !IsValidTopicName(topicName) {
+		return ErrTopicName
 	}
 	pkt.TopicName = topicName
 	// Packet ID
@@ -1195,8 +1195,8 @@ func (pkt *SUBSCRIBE) unmarshal(VAP []byte) error {
 		if err != nil {
 			return ErrSUBSCRIBEMissingTopicFilter
 		}
-		if err = validateTopicFilter(topicFilter); err != nil {
-			return concatErrors(ErrSUBSCRIBEInvalidTopicFilter, err)
+		if !IsValidTopicFilter(topicFilter) {
+			return ErrSUBSCRIBEInvalidTopicFilter
 		}
 		// QoS
 		if len(bytes) == 0 {
@@ -1374,8 +1374,8 @@ func (pkt *UNSUBSCRIBE) unmarshal(VAP []byte) error {
 		if err != nil {
 			return ErrUNSUBSCRIBEMissingTopicFilter
 		}
-		if err = validateTopicFilter(topicFilter); err != nil {
-			return concatErrors(ErrUNSUBSCRIBEInvalidTopicFilter, err)
+		if !IsValidTopicFilter(topicFilter) {
+			return ErrUNSUBSCRIBEInvalidTopicFilter
 		}
 		pkt.TopicFilters = append(pkt.TopicFilters, topicFilter)
 	}
@@ -1733,18 +1733,67 @@ func decodeString(b []byte, required bool) (string, []byte, error) {
 	return decoded, bytes[length:], nil
 }
 
-// validateTopicName validates the topic name.
+// IsValidTopicName determines if the string given is a valid Topic Name.
 //
-// TODO: Find specification section
-func validateTopicName(topicName string) error {
-	return nil
+// Defined in Section 4.7 of the specification.
+func IsValidTopicName(s string) bool {
+	// The wildcard characters can be used in Topic Filters, but MUST NOT be used
+	// within a Topic Name [MQTT-4.7.1-1].
+	// All Topic Names and Topic Filters MUST be at least one character long [MQTT-4.7.3-1]
+	if len(s) == 0 {
+		return false
+	}
+
+	for _, c := range s {
+		if c == '#' || c == '+' {
+			return false
+		}
+	}
+	return true
 }
 
-// validateTopicFilter validates the topic filter.
+// IsValidTopicFilter determines if the string given is a valid Topic Filter.
 //
-// TODO: Find specification section
-func validateTopicFilter(topicFilter string) error {
-	return nil
+// Defined in Section 4.7 of the specification.
+func IsValidTopicFilter(s string) bool {
+	// All Topic Names and Topic Filters MUST be at least one character long [MQTT-4.7.3-1]
+	//
+	// The number sign (‘#’ U+0023) is a wildcard character that matches any
+	// number of levels within a topic.
+	// The multi-level wildcard character MUST be specified either on its own or
+	// following a topic level separator. In either case it MUST be the last
+	// character specified in the Topic Filter [MQTT-4.7.1-2].
+	//
+	// The plus sign (‘+’ U+002B) is a wildcard character that matches
+	// only one topic level.
+	// The single-level wildcard can be used at any level in the Topic Filter,
+	// including first and last levels. Where it is used it MUST occupy an entire
+	// level of the filter [MQTT-4.7.1-3].
+	if len(s) == 0 {
+		return false
+	}
+
+	for i := range s {
+		if s[i] == '#' {
+			// Valid case: i == len(s) - 1 && (i == 0 || s[i-1] == `/`)
+			if i != len(s)-1 || (i != 0 && s[i-1] != '/') {
+				return false
+			}
+		} else if s[i] == '+' {
+			// Valid cases:
+			// Single character: len(s) == 1
+			// First character: i == 0 && s[i+1] == `/`
+			// Last character: i == len(s) - 1 && s[i-1] == `/`
+			// Middle: s[i-1] == `/` && s[i+1] == `/`
+			if len(s) != 1 {
+				if (i == 0 && s[i+1] != '/') || (i == len(s)-1 && s[i-1] != '/') || (s[i-1] != '/' || s[i+1] != '/') {
+					return false
+				}
+			}
+		}
+	}
+
+	return true
 }
 
 // concatErrors concatenates all of the errors into a single one.
