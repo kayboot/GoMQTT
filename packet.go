@@ -933,33 +933,6 @@ func (pkt *PUBREC) Marshal() []byte {
 
 // unmarshal populates the PUBREC control packet from the VAP.
 func (pkt *PUBREC) unmarshal(VAP []byte) error {
-	/*fh, bytes, err := extractFixedHeader(b)
-	if err != nil {
-		return unmarshalError("PUBREC", err.Error())
-	}
-
-	// Validate fixedHeader for PUBREC packet
-	if fh.ptype != TypePUBREC {
-		return unmarshalError("PUBREC", "Invalid PUBREC packet type")
-	}
-	if fh.pflags != FlagsPUBREC {
-		return unmarshalError("PUBREC", "Invalid PUBREC packet flags")
-	}
-	if fh.remLen != 2 {
-		return unmarshalError("PUBREC", "Invalid PUBREC packet length")
-	}
-
-	// Packet ID
-	packetID, bytes, err := decodeInt(bytes)
-	if err != nil {
-		return unmarshalError("PUBREC", err.Error())
-	}
-	pkt.pktID = uint16(packetID)
-
-	return nil*/
-	/*controlPkt, err := pubUnmarshal(TypePUBREC, FlagsPUBREC, b)
-	pkt := controlPkt.(*PUBREC)
-	return pkt, err*/
 	return pubUnmarshal(pkt, VAP)
 }
 
