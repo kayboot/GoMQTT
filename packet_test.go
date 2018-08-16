@@ -96,6 +96,10 @@ func testMarshalPacket(t *testing.T, pktType byte, fixedHeader []byte) {
 		for i := range rands {
 			tests[i].pkt = &PINGRESP{}
 		}
+	case TypeDISCONNECT:
+		for i := range rands {
+			tests[i].pkt = &DISCONNECT{}
+		}
 	}
 
 	var marshaled []byte
@@ -159,6 +163,10 @@ func testUnmarshalPacket(t *testing.T, pktType byte, fixedHeader []byte) {
 		for i := range rands {
 			tests[i].expected = &PINGRESP{}
 		}
+	case TypeDISCONNECT:
+		for i := range rands {
+			tests[i].expected = &DISCONNECT{}
+		}
 	}
 
 	for _, test := range tests {
@@ -183,6 +191,8 @@ func testUnmarshalPacket(t *testing.T, pktType byte, fixedHeader []byte) {
 				pkt, ok = cpkt.(*PINGREQ)
 			case TypePINGRESP:
 				pkt, ok = cpkt.(*PINGRESP)
+			case TypeDISCONNECT:
+				pkt, ok = cpkt.(*DISCONNECT)
 			}
 			if !ok {
 				t.Errorf("Unmarshal %v gave type %T, want %T", ByteSlice(test.encoded), pkt, test.expected)
@@ -496,4 +506,36 @@ func TestErrUnmarshalPINGRESP(t *testing.T) {
 
 func TestUnmarshalPINGRESP(t *testing.T) {
 	testUnmarshalPacket(t, TypePINGRESP, []byte{0xd0, 0x00})
+}
+
+/*******************************************************
+*                      DISCONNECT                      *
+********************************************************/
+
+func TestMarshalDISCONNECT(t *testing.T) {
+	testMarshalPacket(t, TypeDISCONNECT, []byte{0xe0, 0x00})
+}
+
+func TestErrUnmarshalDISCONNECT(t *testing.T) {
+	tests := []struct {
+		encoded  []byte
+		expected error
+	}{
+		{[]byte{0xe8, 0x00}, ErrDISCONNECTFlags},                    // Invalid Packet Flags
+		{[]byte{0xe0, 0x77, 0x00, 0x04}, ErrLengthMismatch},         // Remaining Length mismatch
+		{[]byte{0xe0, 0x02, 0x00, 0x05}, ErrDISCONNECTExpectedSize}, // Extra data
+	}
+
+	for _, test := range tests {
+		_, err := Unmarshal(test.encoded)
+		if err == nil {
+			t.Errorf("Unmarshal %v did not fail, want error '%v'", ByteSlice(test.encoded), test.expected)
+		} else if err != test.expected {
+			t.Errorf("Unmarshal %v failed with '%v', want '%v'", ByteSlice(test.encoded), err, test.expected)
+		}
+	}
+}
+
+func TestUnmarshalDISCONNECT(t *testing.T) {
+	testUnmarshalPacket(t, TypeDISCONNECT, []byte{0xe0, 0x00})
 }
