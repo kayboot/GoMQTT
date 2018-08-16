@@ -2,6 +2,7 @@ package gomqtt
 
 import (
 	"errors"
+	//"fmt"
 	"reflect"
 	"strings"
 )
@@ -57,6 +58,7 @@ var (
 	ErrCONNACKFlags      = errors.New("Invalid flags for CONNACK packet")
 	ErrCAckFlags         = errors.New("Connect Acknowledge Flags bits 7-1 must be set to 0 in CONNACK packet")
 	ErrCONNACKReturnCode = errors.New("Invalid Return Code in CONNACK packet")
+	ErrCONNACK           = errors.New("Unknown extra data encoded in CONNACK packet")
 )
 
 // PUBLISH errors
@@ -227,6 +229,14 @@ type ControllerPacket interface {
 	Flags() byte
 }
 
+// unmarshaler is the interface implemented by all of the MQTT control packets
+// in this file.
+// They allow to unmarshal packets only using the variable header and payload.
+type unmarshaler interface {
+	ControllerPacket
+	unmarshal([]byte) error
+}
+
 // Unmarshal converts the byte slice into one of the MQTT control packets.
 func Unmarshal(b []byte) (ControllerPacket, error) {
 
@@ -261,7 +271,8 @@ func Unmarshal(b []byte) (ControllerPacket, error) {
 		return nil, ErrLengthMismatch
 	}
 
-	var pkt ControllerPacket
+	//var pkt ControllerPacket
+	var pkt unmarshaler
 	var validFlags bool
 	var errFlags error
 	switch pktType {
@@ -338,17 +349,12 @@ func Unmarshal(b []byte) (ControllerPacket, error) {
 	}
 
 	// Call the unmarshal(VAP) function of the packet
-	argument := []reflect.Value{
-		reflect.ValueOf(VAP),
-	}
-	errVal := reflect.ValueOf(pkt).MethodByName("unmarshall").Call(argument)[0]
-	err = errVal.Interface().(error)
-
+	err = pkt.unmarshal(VAP)
 	if err != nil {
 		return nil, err
 	}
 
-	return pkt, nil
+	return pkt.(ControllerPacket), nil
 }
 
 /*
@@ -732,6 +738,10 @@ func (pkt *CONNACK) Marshal() []byte {
 
 // unmarshal populates the CONNACK control packet from the VAP.
 func (pkt *CONNACK) unmarshal(VAP []byte) error {
+	// Expected remaining length
+	if len(VAP) != 2 {
+		return ErrCONNACK
+	}
 	// Connect Acknowledge Flags
 	// Bits 7-1 are reserved and MUST be set to 0.
 	if VAP[0]&0xfe != 0 {
