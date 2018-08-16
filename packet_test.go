@@ -92,6 +92,10 @@ func testMarshalPacket(t *testing.T, pktType byte, fixedHeader []byte) {
 		for i := range rands {
 			tests[i].pkt = &PINGREQ{}
 		}
+	case TypePINGRESP:
+		for i := range rands {
+			tests[i].pkt = &PINGRESP{}
+		}
 	}
 
 	var marshaled []byte
@@ -151,6 +155,10 @@ func testUnmarshalPacket(t *testing.T, pktType byte, fixedHeader []byte) {
 		for i := range rands {
 			tests[i].expected = &PINGREQ{}
 		}
+	case TypePINGRESP:
+		for i := range rands {
+			tests[i].expected = &PINGRESP{}
+		}
 	}
 
 	for _, test := range tests {
@@ -173,6 +181,8 @@ func testUnmarshalPacket(t *testing.T, pktType byte, fixedHeader []byte) {
 				pkt, ok = cpkt.(*UNSUBACK)
 			case TypePINGREQ:
 				pkt, ok = cpkt.(*PINGREQ)
+			case TypePINGRESP:
+				pkt, ok = cpkt.(*PINGRESP)
 			}
 			if !ok {
 				t.Errorf("Unmarshal %v gave type %T, want %T", ByteSlice(test.encoded), pkt, test.expected)
@@ -454,4 +464,36 @@ func TestErrUnmarshalPINGREQ(t *testing.T) {
 
 func TestUnmarshalPINGREQ(t *testing.T) {
 	testUnmarshalPacket(t, TypePINGREQ, []byte{0xc0, 0x00})
+}
+
+/*******************************************************
+*                       PINGRESP                       *
+********************************************************/
+
+func TestMarshalPINGRESP(t *testing.T) {
+	testMarshalPacket(t, TypePINGRESP, []byte{0xd0, 0x00})
+}
+
+func TestErrUnmarshalPINGRESP(t *testing.T) {
+	tests := []struct {
+		encoded  []byte
+		expected error
+	}{
+		{[]byte{0xd2, 0x00}, ErrPINGRESPFlags},                    // Invalid Packet Flags
+		{[]byte{0xd0, 0x1e, 0x00, 0x04}, ErrLengthMismatch},       // Remaining Length mismatch
+		{[]byte{0xd0, 0x02, 0x00, 0x05}, ErrPINGRESPExpectedSize}, // Extra data
+	}
+
+	for _, test := range tests {
+		_, err := Unmarshal(test.encoded)
+		if err == nil {
+			t.Errorf("Unmarshal %v did not fail, want error '%v'", ByteSlice(test.encoded), test.expected)
+		} else if err != test.expected {
+			t.Errorf("Unmarshal %v failed with '%v', want '%v'", ByteSlice(test.encoded), err, test.expected)
+		}
+	}
+}
+
+func TestUnmarshalPINGRESP(t *testing.T) {
+	testUnmarshalPacket(t, TypePINGRESP, []byte{0xd0, 0x00})
 }
