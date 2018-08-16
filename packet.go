@@ -1544,6 +1544,11 @@ func pubUnmarshal(pkt ControllerPacket, VAP []byte) error {
 //
 // Algorithm defined in Section 2.2.3 of the specification.
 func encodeRemLength(X int) []byte {
+	if X == 0 {
+		encoded := make([]byte, 1)
+		encoded[0] = 0x00
+		return encoded
+	}
 	var encodedByte byte
 	// Remaining Length is at most 4 bytes.
 	// If a larger remaining length is encoded, this will be caught

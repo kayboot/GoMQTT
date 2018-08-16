@@ -44,7 +44,7 @@ func randBytes(num int) [][]byte {
 	return rands
 }
 
-func testMarshalPacketID(t *testing.T, pktType byte, fixedHeader []byte) {
+func testMarshalPacket(t *testing.T, pktType byte, fixedHeader []byte) {
 	type testStruct struct {
 		pkt      ControllerPacket
 		expected []byte
@@ -83,6 +83,15 @@ func testMarshalPacketID(t *testing.T, pktType byte, fixedHeader []byte) {
 			tests[i].pkt = &PUBCOMP{pack(random)}
 			tests[i].expected = append(tests[i].expected, random...)
 		}
+	case TypeUNSUBACK:
+		for i, random := range rands {
+			tests[i].pkt = &UNSUBACK{pack(random)}
+			tests[i].expected = append(tests[i].expected, random...)
+		}
+	case TypePINGREQ:
+		for i := range rands {
+			tests[i].pkt = &PINGREQ{}
+		}
 	}
 
 	var marshaled []byte
@@ -94,7 +103,7 @@ func testMarshalPacketID(t *testing.T, pktType byte, fixedHeader []byte) {
 	}
 }
 
-func testUnmarshalPacketID(t *testing.T, pktType byte, fixedHeader []byte) {
+func testUnmarshalPacket(t *testing.T, pktType byte, fixedHeader []byte) {
 	type testStruct struct {
 		encoded  []byte
 		expected ControllerPacket
@@ -133,6 +142,15 @@ func testUnmarshalPacketID(t *testing.T, pktType byte, fixedHeader []byte) {
 			tests[i].expected = &PUBCOMP{pack(random)}
 			tests[i].encoded = append(tests[i].encoded, random...)
 		}
+	case TypeUNSUBACK:
+		for i, random := range rands {
+			tests[i].expected = &UNSUBACK{pack(random)}
+			tests[i].encoded = append(tests[i].encoded, random...)
+		}
+	case TypePINGREQ:
+		for i := range rands {
+			tests[i].expected = &PINGREQ{}
+		}
 	}
 
 	for _, test := range tests {
@@ -151,6 +169,10 @@ func testUnmarshalPacketID(t *testing.T, pktType byte, fixedHeader []byte) {
 				pkt, ok = cpkt.(*PUBREL)
 			case TypePUBCOMP:
 				pkt, ok = cpkt.(*PUBCOMP)
+			case TypeUNSUBACK:
+				pkt, ok = cpkt.(*UNSUBACK)
+			case TypePINGREQ:
+				pkt, ok = cpkt.(*PINGREQ)
 			}
 			if !ok {
 				t.Errorf("Unmarshal %v gave type %T, want %T", ByteSlice(test.encoded), pkt, test.expected)
@@ -242,7 +264,7 @@ func TestUnmarshalCONNACK(t *testing.T) {
 ********************************************************/
 
 func TestMarshalPUBACK(t *testing.T) {
-	testMarshalPacketID(t, TypePUBACK, []byte{0x40, 0x02})
+	testMarshalPacket(t, TypePUBACK, []byte{0x40, 0x02})
 }
 
 func TestErrUnmarshalPUBACK(t *testing.T) {
@@ -267,7 +289,7 @@ func TestErrUnmarshalPUBACK(t *testing.T) {
 }
 
 func TestUnmarshalPUBACK(t *testing.T) {
-	testUnmarshalPacketID(t, TypePUBACK, []byte{0x40, 0x02})
+	testUnmarshalPacket(t, TypePUBACK, []byte{0x40, 0x02})
 }
 
 /*******************************************************
@@ -275,7 +297,7 @@ func TestUnmarshalPUBACK(t *testing.T) {
 ********************************************************/
 
 func TestMarshalPUBREC(t *testing.T) {
-	testMarshalPacketID(t, TypePUBREC, []byte{0x50, 0x02})
+	testMarshalPacket(t, TypePUBREC, []byte{0x50, 0x02})
 }
 
 func TestErrUnmarshalPUBREC(t *testing.T) {
@@ -300,7 +322,7 @@ func TestErrUnmarshalPUBREC(t *testing.T) {
 }
 
 func TestUnmarshalPUBREC(t *testing.T) {
-	testUnmarshalPacketID(t, TypePUBREC, []byte{0x50, 0x02})
+	testUnmarshalPacket(t, TypePUBREC, []byte{0x50, 0x02})
 }
 
 /*******************************************************
@@ -308,7 +330,7 @@ func TestUnmarshalPUBREC(t *testing.T) {
 ********************************************************/
 
 func TestMarshalPUBREL(t *testing.T) {
-	testMarshalPacketID(t, TypePUBREL, []byte{0x62, 0x02})
+	testMarshalPacket(t, TypePUBREL, []byte{0x62, 0x02})
 }
 
 func TestErrUnmarshalPUBREL(t *testing.T) {
@@ -333,7 +355,7 @@ func TestErrUnmarshalPUBREL(t *testing.T) {
 }
 
 func TestUnmarshalPUBREL(t *testing.T) {
-	testUnmarshalPacketID(t, TypePUBREL, []byte{0x62, 0x02})
+	testUnmarshalPacket(t, TypePUBREL, []byte{0x62, 0x02})
 }
 
 /*******************************************************
@@ -341,7 +363,7 @@ func TestUnmarshalPUBREL(t *testing.T) {
 ********************************************************/
 
 func TestMarshalPUBCOMP(t *testing.T) {
-	testMarshalPacketID(t, TypePUBCOMP, []byte{0x70, 0x02})
+	testMarshalPacket(t, TypePUBCOMP, []byte{0x70, 0x02})
 }
 
 func TestErrUnmarshalPUBCOMP(t *testing.T) {
@@ -366,5 +388,70 @@ func TestErrUnmarshalPUBCOMP(t *testing.T) {
 }
 
 func TestUnmarshalPUBCOMP(t *testing.T) {
-	testUnmarshalPacketID(t, TypePUBCOMP, []byte{0x70, 0x02})
+	testUnmarshalPacket(t, TypePUBCOMP, []byte{0x70, 0x02})
+}
+
+/*******************************************************
+*                       UNSUBACK                       *
+********************************************************/
+
+func TestMarshalUNSUBACK(t *testing.T) {
+	testMarshalPacket(t, TypeUNSUBACK, []byte{0xb0, 0x02})
+}
+
+func TestErrUnmarshalUNSUBACK(t *testing.T) {
+	tests := []struct {
+		encoded  []byte
+		expected error
+	}{
+		{[]byte{0xb5, 0x02, 0x13, 0x20}, ErrUNSUBACKFlags},                    // Invalid Packet Flags
+		{[]byte{0xb0, 0x42, 0x00, 0x04}, ErrLengthMismatch},                   // Remaining Length mismatch
+		{[]byte{0xb0, 0x04, 0x00, 0x05, 0x02, 0x04}, ErrUNSUBACKExpectedSize}, // Extra data
+		{[]byte{0xb0, 0x02, 0x00, 0x00}, ErrUNSUBACKInvalidPacketID},          // Invalid Packet ID
+	}
+
+	for _, test := range tests {
+		_, err := Unmarshal(test.encoded)
+		if err == nil {
+			t.Errorf("Unmarshal %v did not fail, want error '%v'", ByteSlice(test.encoded), test.expected)
+		} else if err != test.expected {
+			t.Errorf("Unmarshal %v failed with '%v', want '%v'", ByteSlice(test.encoded), err, test.expected)
+		}
+	}
+}
+
+func TestUnmarshalUNSUBACK(t *testing.T) {
+	testUnmarshalPacket(t, TypeUNSUBACK, []byte{0xb0, 0x02})
+}
+
+/*******************************************************
+*                        PINGREQ                       *
+********************************************************/
+
+func TestMarshalPINGREQ(t *testing.T) {
+	testMarshalPacket(t, TypePINGREQ, []byte{0xc0, 0x00})
+}
+
+func TestErrUnmarshalPINGREQ(t *testing.T) {
+	tests := []struct {
+		encoded  []byte
+		expected error
+	}{
+		{[]byte{0xce, 0x00}, ErrPINGREQFlags},                    // Invalid Packet Flags
+		{[]byte{0xc0, 0x1e, 0x00, 0x04}, ErrLengthMismatch},      // Remaining Length mismatch
+		{[]byte{0xc0, 0x02, 0x00, 0x05}, ErrPINGREQExpectedSize}, // Extra data
+	}
+
+	for _, test := range tests {
+		_, err := Unmarshal(test.encoded)
+		if err == nil {
+			t.Errorf("Unmarshal %v did not fail, want error '%v'", ByteSlice(test.encoded), test.expected)
+		} else if err != test.expected {
+			t.Errorf("Unmarshal %v failed with '%v', want '%v'", ByteSlice(test.encoded), err, test.expected)
+		}
+	}
+}
+
+func TestUnmarshalPINGREQ(t *testing.T) {
+	testUnmarshalPacket(t, TypePINGREQ, []byte{0xc0, 0x00})
 }
