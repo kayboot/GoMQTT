@@ -2,7 +2,6 @@ package gomqtt
 
 import (
 	"errors"
-	//"fmt"
 	"reflect"
 	"strings"
 )
@@ -73,30 +72,30 @@ var (
 
 // PUBACK errors
 var (
-	ErrPUBACKFlags        = errors.New("Invalid flags for PUBACK packet")
-	ErrPUBACKExpectedSize = errors.New("Invalid expected packet size for PUBACK packet")
-	ErrPUBACKPacketID     = errors.New("Packet ID missing in PUBACK packet")
+	ErrPUBACKFlags           = errors.New("Invalid flags for PUBACK packet")
+	ErrPUBACKExpectedSize    = errors.New("Invalid expected packet size for PUBACK packet")
+	ErrPUBACKInvalidPacketID = errors.New("Packet ID in PUBACK packet must be non-zero")
 )
 
 // PUBREC errors
 var (
-	ErrPUBRECFlags        = errors.New("Invalid flags for PUBREC packet")
-	ErrPUBRECExpectedSize = errors.New("Invalid expected packet size for PUBREC packet")
-	ErrPUBRECPacketID     = errors.New("Packet ID missing in PUBREC packet")
+	ErrPUBRECFlags           = errors.New("Invalid flags for PUBREC packet")
+	ErrPUBRECExpectedSize    = errors.New("Invalid expected packet size for PUBREC packet")
+	ErrPUBRECInvalidPacketID = errors.New("Packet ID in PUBREC packet must be non-zero")
 )
 
 // PUBREL errors
 var (
-	ErrPUBRELFlags        = errors.New("Invalid flags for PUBREL packet")
-	ErrPUBRELExpectedSize = errors.New("Invalid expected packet size for PUBREL packet")
-	ErrPUBRELPacketID     = errors.New("Packet ID missing in PUBREL packet")
+	ErrPUBRELFlags           = errors.New("Invalid flags for PUBREL packet")
+	ErrPUBRELExpectedSize    = errors.New("Invalid expected packet size for PUBREL packet")
+	ErrPUBRELInvalidPacketID = errors.New("Packet ID in PUBREL packet must be non-zero")
 )
 
 // PUBCOMP errors
 var (
-	ErrPUBCOMPFlags        = errors.New("Invalid flags for PUBCOMP packet")
-	ErrPUBCOMPExpectedSize = errors.New("Invalid expected packet size for PUBCOMP packet")
-	ErrPUBCOMPPacketID     = errors.New("Packet ID missing in PUBCOMP packet")
+	ErrPUBCOMPFlags           = errors.New("Invalid flags for PUBCOMP packet")
+	ErrPUBCOMPExpectedSize    = errors.New("Invalid expected packet size for PUBCOMP packet")
+	ErrPUBCOMPInvalidPacketID = errors.New("Packet ID in PUBCOMP packet must be non-zero")
 )
 
 // SUBSCRIBE errors
@@ -134,9 +133,9 @@ var (
 
 // UNSUBACK errors
 var (
-	ErrUNSUBACKFlags        = errors.New("Invalid flags for UNSUBACK packet")
-	ErrUNSUBACKExpectedSize = errors.New("Invalid expected packet size for UNSUBACK packet")
-	ErrUNSUBACKPacketID     = errors.New("Packet ID missing in UNSUBACK packet")
+	ErrUNSUBACKFlags           = errors.New("Invalid flags for UNSUBACK packet")
+	ErrUNSUBACKExpectedSize    = errors.New("Invalid expected packet size for UNSUBACK packet")
+	ErrUNSUBACKInvalidPacketID = errors.New("Packet ID in UNSUBACK packet must be non-zero")
 )
 
 // PINGREQ errors
@@ -901,33 +900,6 @@ func (pkt *PUBACK) Marshal() []byte {
 
 // unmarshal populates the PUBACK control packet from the VAP.
 func (pkt *PUBACK) unmarshal(VAP []byte) error {
-	/*fh, bytes, err := extractFixedHeader(b)
-	if err != nil {
-		return unmarshalError("PUBACK", err.Error())
-	}
-
-	// Validate fixedHeader for PUBACK packet
-	if fh.ptype != TypePUBACK {
-		return unmarshalError("PUBACK", "Invalid PUBACK packet type")
-	}
-	if fh.pflags != FlagsPUBACK {
-		return unmarshalError("PUBACK", "Invalid PUBACK packet flags")
-	}
-	if fh.remLen != 2 {
-		return unmarshalError("PUBACK", "Invalid PUBACK packet length")
-	}
-
-	// Packet ID
-	packetID, bytes, err := decodeInt(bytes)
-	if err != nil {
-		return unmarshalError("PUBACK", err.Error())
-	}
-	pkt.pktID = uint16(packetID)
-
-	return nil*/
-	/*controlPkt, err := pubUnmarshal(TypePUBACK, FlagsPUBACK, b)
-	pkt := controlPkt.(*PUBACK)
-	return pkt, err*/
 	return pubUnmarshal(pkt, VAP)
 }
 
@@ -1535,17 +1507,11 @@ func pubMarshal(pkt ControllerPacket) []byte {
 	var capacity int
 
 	switch pkt.Type() {
-	case TypePUBACK:
-	case TypePUBREC:
-	case TypePUBREL:
-	case TypePUBCOMP:
-	case TypeUNSUBACK:
-		packetID = reflect.ValueOf(pkt).FieldByName("PacketID").Interface().(uint16)
+	case TypePUBACK, TypePUBREC, TypePUBREL, TypePUBCOMP, TypeUNSUBACK:
+		packetID = uint16(reflect.ValueOf(pkt).Elem().FieldByName("PacketID").Uint())
 		encodePacketID = true
 		capacity = 2
-	case TypePINGREQ:
-	case TypePINGRESP:
-	case TypeDISCONNECT:
+	case TypePINGREQ, TypePINGRESP, TypeDISCONNECT:
 		encodePacketID = false
 		capacity = 0
 	}
@@ -1565,34 +1531,34 @@ func pubMarshal(pkt ControllerPacket) []byte {
 // PINGREQ, PINGRESP, DISCONNECT
 func pubUnmarshal(pkt ControllerPacket, VAP []byte) error {
 	var errExpectedSize error
-	var errPacketID error
+	var errInvalidPacketID error
 	var expectedRemLen int
 	var decodePacketID bool
 
 	switch pkt.Type() {
 	case TypePUBACK:
 		errExpectedSize = ErrPUBACKExpectedSize
-		errPacketID = ErrPUBACKPacketID
+		errInvalidPacketID = ErrPUBACKInvalidPacketID
 		expectedRemLen = 2
 		decodePacketID = true
 	case TypePUBREC:
 		errExpectedSize = ErrPUBRECExpectedSize
-		errPacketID = ErrPUBRECPacketID
+		errInvalidPacketID = ErrPUBRECInvalidPacketID
 		expectedRemLen = 2
 		decodePacketID = true
 	case TypePUBREL:
 		errExpectedSize = ErrPUBRELExpectedSize
-		errPacketID = ErrPUBRELPacketID
+		errInvalidPacketID = ErrPUBRELInvalidPacketID
 		expectedRemLen = 2
 		decodePacketID = true
 	case TypePUBCOMP:
 		errExpectedSize = ErrPUBCOMPExpectedSize
-		errPacketID = ErrPUBCOMPPacketID
+		errInvalidPacketID = ErrPUBCOMPInvalidPacketID
 		expectedRemLen = 2
 		decodePacketID = true
 	case TypeUNSUBACK:
 		errExpectedSize = ErrUNSUBACKExpectedSize
-		errPacketID = ErrUNSUBACKPacketID
+		errInvalidPacketID = ErrUNSUBACKInvalidPacketID
 		expectedRemLen = 2
 		decodePacketID = true
 	case TypePINGREQ:
@@ -1616,11 +1582,12 @@ func pubUnmarshal(pkt ControllerPacket, VAP []byte) error {
 
 	// Packet ID
 	if decodePacketID {
-		packetID, _, err := decodeUInt16(VAP)
-		if err != nil {
-			return errPacketID
+		// No error can happen since the expected size is checked and must be 2
+		packetID, _, _ := decodeUInt16(VAP)
+		if packetID == 0 {
+			return errInvalidPacketID
 		}
-		reflect.ValueOf(pkt).FieldByName("PacketID").Set(reflect.ValueOf(packetID))
+		reflect.ValueOf(pkt).Elem().FieldByName("PacketID").Set(reflect.ValueOf(packetID))
 	}
 
 	return nil
@@ -1714,7 +1681,9 @@ func decodeUInt16(b []byte) (uint16, []byte, error) {
 	if len(b) < 2 {
 		return 0, nil, ErrDecodeUInt16
 	}
-	decoded := uint16((b[0] << 8) + b[1])
+	var decoded uint16 = uint16(b[0])
+	decoded <<= 8
+	decoded |= uint16(b[1])
 	return decoded, b[2:], nil
 }
 
