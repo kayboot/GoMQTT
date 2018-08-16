@@ -78,6 +78,11 @@ func testMarshalPacketID(t *testing.T, pktType byte, fixedHeader []byte) {
 			tests[i].pkt = &PUBREL{pack(random)}
 			tests[i].expected = append(tests[i].expected, random...)
 		}
+	case TypePUBCOMP:
+		for i, random := range rands {
+			tests[i].pkt = &PUBCOMP{pack(random)}
+			tests[i].expected = append(tests[i].expected, random...)
+		}
 	}
 
 	var marshaled []byte
@@ -123,6 +128,11 @@ func testUnmarshalPacketID(t *testing.T, pktType byte, fixedHeader []byte) {
 			tests[i].expected = &PUBREL{pack(random)}
 			tests[i].encoded = append(tests[i].encoded, random...)
 		}
+	case TypePUBCOMP:
+		for i, random := range rands {
+			tests[i].expected = &PUBCOMP{pack(random)}
+			tests[i].encoded = append(tests[i].encoded, random...)
+		}
 	}
 
 	for _, test := range tests {
@@ -139,6 +149,8 @@ func testUnmarshalPacketID(t *testing.T, pktType byte, fixedHeader []byte) {
 				pkt, ok = cpkt.(*PUBREC)
 			case TypePUBREL:
 				pkt, ok = cpkt.(*PUBREL)
+			case TypePUBCOMP:
+				pkt, ok = cpkt.(*PUBCOMP)
 			}
 			if !ok {
 				t.Errorf("Unmarshal %v gave type %T, want %T", ByteSlice(test.encoded), pkt, test.expected)
@@ -322,4 +334,37 @@ func TestErrUnmarshalPUBREL(t *testing.T) {
 
 func TestUnmarshalPUBREL(t *testing.T) {
 	testUnmarshalPacketID(t, TypePUBREL, []byte{0x62, 0x02})
+}
+
+/*******************************************************
+*                       PUBCOMP                        *
+********************************************************/
+
+func TestMarshalPUBCOMP(t *testing.T) {
+	testMarshalPacketID(t, TypePUBCOMP, []byte{0x70, 0x02})
+}
+
+func TestErrUnmarshalPUBCOMP(t *testing.T) {
+	tests := []struct {
+		encoded  []byte
+		expected error
+	}{
+		{[]byte{0x7e, 0x02, 0x13, 0x20}, ErrPUBCOMPFlags},                    // Invalid Packet Flags
+		{[]byte{0x70, 0x63, 0x00, 0x04}, ErrLengthMismatch},                  // Remaining Length mismatch
+		{[]byte{0x70, 0x04, 0x00, 0x05, 0x02, 0x04}, ErrPUBCOMPExpectedSize}, // Extra data
+		{[]byte{0x70, 0x02, 0x00, 0x00}, ErrPUBCOMPInvalidPacketID},          // Invalid Packet ID
+	}
+
+	for _, test := range tests {
+		_, err := Unmarshal(test.encoded)
+		if err == nil {
+			t.Errorf("Unmarshal %v did not fail, want error '%v'", ByteSlice(test.encoded), test.expected)
+		} else if err != test.expected {
+			t.Errorf("Unmarshal %v failed with '%v', want '%v'", ByteSlice(test.encoded), err, test.expected)
+		}
+	}
+}
+
+func TestUnmarshalPUBCOMP(t *testing.T) {
+	testUnmarshalPacketID(t, TypePUBCOMP, []byte{0x70, 0x02})
 }
