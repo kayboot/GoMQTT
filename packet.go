@@ -67,7 +67,6 @@ var (
 	ErrTopicName              = errors.New("Invalid Topic Name in PUBLISH packet")
 	ErrPUBLISHPacketID        = errors.New("Packet ID missing in PUBLISH packet")
 	ErrPUBLISHInvalidPacketID = errors.New("Packet ID in PUBLISH packet must be non-zero")
-	ErrPUBLISH                = errors.New("Unknown extra data encoded in PUBLISH packet")
 )
 
 // PUBACK errors
@@ -156,14 +155,6 @@ var (
 	ErrDISCONNECTExpectedSize = errors.New("Invalid expected packet size for DISCONNECT packet")
 )
 
-const (
-	ErrPacketIDQoSZero  = "Packet must not contain Packet Identifier with QoS 0"
-	ErrUsernamePresent  = "Username found in CONNECT packet even though flag is missing"
-	ErrPasswordPresent  = "Password found in CONNECT packet even though flag is missing"
-	ErrPasswordUsername = "Password found in CONNECT packet even though username flag is missing"
-	ErrInvalidClientID  = "Client Identifier invalid in CONNECT packet payload"
-)
-
 // The different MQTT Control Packet Types found in the first
 // 4 bits of the first byte of a control packet.
 const (
@@ -250,7 +241,7 @@ func Unmarshal(b []byte) (ControllerPacket, error) {
 	var pktFlags byte = b[0] & 0x0f
 
 	// The following bytes are the encoded Remaining Length of the packet.
-	remLen, used, err := decodeRemLength(b)
+	remLen, used, err := DecodeRemLength(b)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +363,7 @@ type fixedHeader struct {
 
 // addFixedHeader adds the fixed header to the control packet.
 func addFixedHeader(pkt ControllerPacket, marshaled []byte) []byte {
-	remLen := encodeRemLength(len(marshaled))
+	remLen := EncodeRemLength(len(marshaled))
 
 	length := 1 + len(remLen) + len(marshaled)
 
@@ -547,7 +538,9 @@ type CONNECT struct {
 
 // Marshal converts the CONNECT control packet into its byte slice representation.
 func (pkt *CONNECT) Marshal() []byte {
-	marshaled := make([]byte, 0)
+	capacity := 1 + 2 + len(pkt.ClientID) + len(pkt.WillTopic) +
+		len(pkt.WillMessage) + len(pkt.Username) + len(pkt.Password)
+	marshaled := make([]byte, 0, capacity)
 
 	// Protocol
 	marshaled = append(marshaled, encodeString(Protocol)...)
@@ -805,12 +798,15 @@ type PUBLISH struct {
 
 // Marshal converts the PUBLISH control packet into its byte slice representation.
 func (pkt *PUBLISH) Marshal() []byte {
-	marshaled := make([]byte, 0)
+	capacity := len(pkt.TopicName) + 2 + len(pkt.Message)
+	marshaled := make([]byte, 0, capacity)
 
 	// Topic Name
 	marshaled = append(marshaled, encodeString(pkt.TopicName)...)
 	// Packet ID
 	marshaled = append(marshaled, encodeUInt16(pkt.PacketID)...)
+	// Application Message
+	marshaled = append(marshaled, pkt.Message...)
 	// Fixed Header
 	marshaled = addFixedHeader(pkt, marshaled)
 	// PUBLISH control packet has special Flags
@@ -999,33 +995,6 @@ func (pkt *PUBCOMP) Marshal() []byte {
 
 // unmarshal populates the PUBCOMP control packet from the VAP.
 func (pkt *PUBCOMP) unmarshal(VAP []byte) error {
-	/*fh, bytes, err := extractFixedHeader(b)
-	if err != nil {
-		return unmarshalError("PUBCOMP", err.Error())
-	}
-
-	// Validate fixedHeader for PUBCOMP packet
-	if fh.ptype != TypePUBCOMP {
-		return unmarshalError("PUBCOMP", "Invalid PUBCOMP packet type")
-	}
-	if fh.pflags != FlagsPUBCOMP {
-		return unmarshalError("PUBCOMP", "Invalid PUBCOMP packet flags")
-	}
-	if fh.remLen != 2 {
-		return unmarshalError("PUBCOMP", "Invalid PUBCOMP packet length")
-	}
-
-	// Packet ID
-	packetID, bytes, err := decodeInt(bytes)
-	if err != nil {
-		return unmarshalError("PUBCOMP", err.Error())
-	}
-	pkt.pktID = uint16(packetID)
-
-	return nil*/
-	/*controlPkt, err := pubUnmarshal(TypePUBCOMP, FlagsPUBCOMP, b)
-	pkt := controlPkt.(*PUBCOMP)
-	return pkt, err*/
 	return pubUnmarshal(pkt, VAP)
 }
 
@@ -1185,7 +1154,8 @@ type SUBACK struct {
 
 // Marshal converts the SUBACK control packet into its byte slice representation.
 func (pkt *SUBACK) Marshal() []byte {
-	marshaled := make([]byte, 0)
+	capacity := 2 + len(pkt.ReturnCodes)
+	marshaled := make([]byte, 0, capacity)
 
 	// Packet ID
 	marshaled = append(marshaled, encodeUInt16(pkt.PacketID)...)
@@ -1539,11 +1509,11 @@ func pubUnmarshal(pkt ControllerPacket, VAP []byte) error {
 	return nil
 }
 
-// encodeRemLength encodes the Remaining Length size into a byte slice
+// EncodeRemLength encodes the Remaining Length size into a byte slice
 // to add to the fixed header of the control packet byte slice.
 //
 // Algorithm defined in Section 2.2.3 of the specification.
-func encodeRemLength(X int) []byte {
+func EncodeRemLength(X int) []byte {
 	if X == 0 {
 		encoded := make([]byte, 1)
 		encoded[0] = 0x00
@@ -1565,13 +1535,13 @@ func encodeRemLength(X int) []byte {
 	return remLength
 }
 
-// decodeRemLength decodes the Remaining Length size from the byte slice of
+// DecodeRemLength decodes the Remaining Length size from the byte slice of
 // of a control packet.
 // Since the encoded Remaining Length uses a variable number of bytes,
 // the decoded length and the number of bytes used by the encoding are returned.
 //
 // Algorithm defined in Section 2.2.3 of the specification.
-func decodeRemLength(pkt []byte) (length int, used int, e error) {
+func DecodeRemLength(pkt []byte) (length int, used int, e error) {
 	var encodedByte byte
 	// Starting byte of Remaining Length starts on the 2nd byte
 	// (i.e. index 1 in the slice)
